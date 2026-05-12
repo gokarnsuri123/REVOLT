@@ -966,7 +966,7 @@ window.sendAI=async()=>{
           contents: convHistory.length===1
             ? [{role:'user',parts:[{text:SYSTEM_PROMPT+'\n\n'+msg}]}]
             : convHistory,
-          generationConfig:{maxOutputTokens:1024,temperature:0.7}
+          generationConfig:{maxOutputTokens:4096,temperature:0.7}
         })
       }
     );
@@ -1089,3 +1089,4 @@ loadAll();
 </script>
 </body>
 </html>
+
