@@ -962,35 +962,140 @@ window.confRent=async()=>{
 // ── PROFILE DATA ──
 async function loadMyData(){
   if(!CU)return;
-  // My Listings
+
+  // ── MY LISTINGS (no composite index needed — single where, sort client-side)
   try{
-    const snap=await getDocs(query(collection(db,'listings'),where('sellerId','==',CU.uid),orderBy('createdAt','desc')));
-    const items=snap.docs.map(d=>({id:d.id,...d.data()}));
     const w=document.getElementById('mylist-wrap');
-    w.innerHTML=items.length?`<div class="lg">${items.map(i=>buildCard(i,true)).join('')}</div>`:`<div class="es"><div class="ei">&#9672;</div><div>No listings yet.</div><br><button class="btn-p" style="margin-top:14px" onclick="ra(()=>om('sellm'))">List a Component</button></div>`;
-  }catch(e){console.error(e);}
-  // My Orders
+    w.innerHTML='<div style="text-align:center;padding:30px"><div class="spin"></div></div>';
+    const snap=await getDocs(query(collection(db,'listings'),where('sellerId','==',CU.uid)));
+    const items=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+    w.innerHTML=items.length
+      ?`<div class="lg">${items.map(i=>buildCard(i,true)).join('')}</div>`
+      :`<div class="es"><div class="ei">&#9672;</div><div>No listings yet.</div><br><button class="btn-p" style="margin-top:14px" onclick="ra(()=>om('sellm'))">List a Component</button></div>`;
+  }catch(e){
+    console.error('MyListings:',e);
+    document.getElementById('mylist-wrap').innerHTML=`<div class="es"><div class="ei">&#9888;</div><div>Error loading listings: ${e.message}</div></div>`;
+  }
+
+  // ── MY ORDERS (single where on buyerId, filter type client-side)
   try{
-    const snap=await getDocs(query(collection(db,'orders'),where('buyerId','==',CU.uid),where('type','==','purchase'),orderBy('createdAt','desc')));
-    const items=snap.docs.map(d=>({id:d.id,...d.data()}));
     const w=document.getElementById('myorders-wrap');
-    w.innerHTML=items.length?items.map(o=>`<div class="orow"><div><div class="otitle">${o.title}</div><div class="ometa">from ${o.sellerName} &bull; &#8377;${(o.price||0).toLocaleString('en-IN')}</div></div><div class="stag" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#10B981">${(o.status||'').replace(/_/g,' ').toUpperCase()}</div></div>`).join(''):`<div class="es"><div class="ei">&#9635;</div><div>No purchases yet.</div></div>`;
-  }catch(e){console.error(e);}
-  // My Rentals
+    w.innerHTML='<div style="text-align:center;padding:30px"><div class="spin"></div></div>';
+    const snap=await getDocs(query(collection(db,'orders'),where('buyerId','==',CU.uid)));
+    const items=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(o=>o.type==='purchase')
+      .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+    w.innerHTML=items.length
+      ?items.map(o=>`
+        <div class="orow">
+          <div>
+            <div class="otitle">${o.title||'Unknown item'}</div>
+            <div class="ometa">from ${o.sellerName||'Seller'} &bull; &#8377;${(o.price||0).toLocaleString('en-IN')} &bull; ${o.deliveryAddress||''}</div>
+          </div>
+          <div class="stag" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#10B981">${(o.status||'pending').replace(/_/g,' ').toUpperCase()}</div>
+        </div>`).join('')
+      :`<div class="es"><div class="ei">&#9635;</div><div>No purchases yet. Browse the marketplace to find components.</div></div>`;
+  }catch(e){
+    console.error('MyOrders:',e);
+    document.getElementById('myorders-wrap').innerHTML=`<div class="es"><div class="ei">&#9888;</div><div>Error loading orders: ${e.message}</div></div>`;
+  }
+
+  // ── MY RENTALS (same approach — single where, filter client-side)
   try{
-    const snap=await getDocs(query(collection(db,'orders'),where('buyerId','==',CU.uid),where('type','==','rental'),orderBy('createdAt','desc')));
-    const items=snap.docs.map(d=>({id:d.id,...d.data()}));
     const w=document.getElementById('myrentals-wrap');
-    w.innerHTML=items.length?items.map(o=>`<div class="orow"><div><div class="otitle">${o.title}</div><div class="ometa">${o.startDate} to ${o.endDate} &bull; &#8377;${o.dailyRate}/day</div></div><div class="stag" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);color:#38BDF8">${(o.status||'').replace(/_/g,' ').toUpperCase()}</div></div>`).join(''):`<div class="es"><div class="ei">&#9673;</div><div>No rentals yet.</div></div>`;
-  }catch(e){console.error(e);}
+    w.innerHTML='<div style="text-align:center;padding:30px"><div class="spin"></div></div>';
+    const snap=await getDocs(query(collection(db,'orders'),where('buyerId','==',CU.uid)));
+    const items=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(o=>o.type==='rental')
+      .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+    w.innerHTML=items.length
+      ?items.map(o=>`
+        <div class="orow">
+          <div>
+            <div class="otitle">${o.title||'Unknown item'}</div>
+            <div class="ometa">${o.startDate||'?'} to ${o.endDate||'?'} &bull; &#8377;${o.dailyRate||0}/day &bull; ${o.deliveryAddress||''}</div>
+          </div>
+          <div class="stag" style="background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);color:#38BDF8">${(o.status||'confirmed').replace(/_/g,' ').toUpperCase()}</div>
+        </div>`).join('')
+      :`<div class="es"><div class="ei">&#9673;</div><div>No rentals yet. Check out the Rentals page.</div></div>`;
+  }catch(e){
+    console.error('MyRentals:',e);
+    document.getElementById('myrentals-wrap').innerHTML=`<div class="es"><div class="ei">&#9888;</div><div>Error loading rentals: ${e.message}</div></div>`;
+  }
+
+  // ── INBOX (seller: show all buyers who messaged about my listings)
+  try{
+    const w=document.getElementById('myinbox-wrap');
+    w.innerHTML='<div style="text-align:center;padding:30px"><div class="spin"></div></div>';
+    const snap=await getDocs(query(collection(db,'listings'),where('sellerId','==',CU.uid)));
+    const myListings=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(!myListings.length){
+      w.innerHTML='<div class="es"><div class="ei">&#128172;</div><div>No messages yet. List components to receive buyer inquiries.</div></div>';
+      return;
+    }
+    w.innerHTML=`
+      <div style="margin-bottom:16px;font-size:14px;color:var(--dim)">Buyers can message you about your listings. Click any listing below to view its chat messages.</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${myListings.map(l=>`
+          <div class="orow" style="cursor:pointer" onclick="openSellerInbox('${l.id}','${(l.title||'').replace(/'/g,'')}')">
+            <div>
+              <div class="otitle">&#128172; ${l.title}</div>
+              <div class="ometa">&#8377;${(l.price||0).toLocaleString('en-IN')} &bull; ${l.condition||''} &bull; ${l.category||''}</div>
+            </div>
+            <div style="color:var(--sky);font-size:13px;font-weight:600">View Messages &#8594;</div>
+          </div>`).join('')}
+      </div>`;
+  }catch(e){
+    console.error('Inbox:',e);
+    document.getElementById('myinbox-wrap').innerHTML=`<div class="es"><div class="ei">&#9888;</div><div>Error loading inbox: ${e.message}</div></div>`;
+  }
 }
+
+window.openSellerInbox=async(listingId,listingTitle)=>{
+  if(!CU)return;
+  // Load all messages where this user is the seller for this listing
+  try{
+    chatItem={id:listingId,title:listingTitle,sellerId:CU.uid,sellerName:CU.displayName||''};
+    document.getElementById('chat-seller-info').textContent='Messages about: '+listingTitle;
+    const box=document.getElementById('chat-messages');
+    box.innerHTML='<div style="text-align:center;color:var(--dim);font-size:14px">Loading...</div>';
+    om('chatm');
+    // Find all chat rooms for this listing by querying messages collection group
+    // Since Firestore can't query subcollections without collection group queries,
+    // we store a flat reference too
+    const snap=await getDocs(query(collection(db,'chatindex'),where('listingId','==',listingId)));
+    if(!snap.docs.length){
+      box.innerHTML='<div style="text-align:center;color:var(--dim);font-size:14px;margin:auto;padding:20px">No messages yet for this listing.<br><br>When buyers send you messages, they will appear here.</div>';
+      return;
+    }
+    // Load messages from first room found
+    const roomId=snap.docs[0].data().roomId;
+    const msgSnap=await getDocs(query(collection(db,'chats',roomId,'messages'),orderBy('createdAt','asc')));
+    const msgs=msgSnap.docs.map(d=>d.data());
+    box.innerHTML=msgs.length?msgs.map(m=>{
+      const isMe=m.senderId===CU.uid;
+      return`<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};gap:3px">
+        <div style="background:${isMe?'rgba(37,99,235,.22)':'rgba(56,189,248,.1)'};border:1px solid ${isMe?'rgba(37,99,235,.3)':'rgba(56,189,248,.15)'};border-radius:${isMe?'12px 12px 3px 12px':'12px 12px 12px 3px'};padding:10px 14px;max-width:80%;font-size:14px;color:var(--gray);line-height:1.5">${m.text}</div>
+        <div style="font-size:11px;color:var(--dark)">${m.senderName||'User'}</div>
+      </div>`;
+    }).join(''):'<div style="text-align:center;color:var(--dim);font-size:14px;margin:auto">No messages yet.</div>';
+    box.scrollTop=box.scrollHeight;
+  }catch(e){console.error(e);}
+};
 
 // ── DELETE LISTING ──
 window.delListing=async(id)=>{
   if(!CU)return;
-  if(!confirm('Remove this listing? This cannot be undone.'))return;
+  // Ownership check — only the seller can delete their own listing
+  const item=listings.find(l=>l.id===id);
+  if(!item){toast('Listing not found','err');return;}
+  if(item.sellerId!==CU.uid){toast('You can only remove your own listings','err');return;}
+  if(!confirm('Remove "'+item.title+'"? This cannot be undone.'))return;
   try{
     await deleteDoc(fsDoc(db,'listings',id));
+    // Remove from local cache immediately
+    listings=listings.filter(l=>l.id!==id);
     toast('Listing removed','ok');
     loadAll();
     if(document.getElementById('profile-page').classList.contains('active'))loadMyData();
@@ -1036,11 +1141,23 @@ window.sendChatMsg=async()=>{
   const text=inp.value.trim();if(!text)return;
   const roomId=[CU.uid,chatItem.sellerId].sort().join('_')+'_'+chatItem.id;
   try{
+    // Write message
     await addDoc(collection(db,'chats',roomId,'messages'),{
       text,senderId:CU.uid,senderName:CU.displayName||CU.email,
       recipientId:chatItem.sellerId,listingId:chatItem.id,
       createdAt:serverTimestamp()
     });
+    // Write chatindex entry so seller can find this room (upsert pattern)
+    const idxRef=collection(db,'chatindex');
+    const existing=await getDocs(query(idxRef,where('roomId','==',roomId)));
+    if(existing.empty){
+      await addDoc(idxRef,{
+        roomId,listingId:chatItem.id,listingTitle:chatItem.title,
+        sellerId:chatItem.sellerId,buyerId:CU.uid,
+        buyerName:CU.displayName||CU.email,
+        createdAt:serverTimestamp()
+      });
+    }
     inp.value='';
     loadChatMessages(chatItem.id);
   }catch(er){toast('Send failed: '+er.message,'err');}
@@ -1213,4 +1330,3 @@ loadAll();
 </script>
 </body>
 </html>
-
