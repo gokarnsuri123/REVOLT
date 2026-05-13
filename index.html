@@ -294,6 +294,8 @@ footer{background:#060E1A;border-top:1px solid rgba(255,255,255,.05);padding:64p
 @keyframes spin{to{transform:rotate(360deg);}}
 .rv{opacity:0;transform:translateY(26px);transition:opacity .6s ease,transform .6s ease;}
 .rv.vis{opacity:1;transform:none;}
+.pm-sel{border-color:rgba(37,99,235,.6)!important;background:rgba(37,99,235,.2)!important;box-shadow:0 0 20px rgba(37,99,235,.2);}
+.pm-unsel{border-color:var(--border)!important;background:rgba(15,23,42,.4)!important;}
 
 /* RESPONSIVE */
 @media(max-width:900px){.vg,.fgrid{grid-template-columns:1fr;}.nav-links{display:none;}}
@@ -401,15 +403,80 @@ footer{background:#060E1A;border-top:1px solid rgba(255,255,255,.05);padding:64p
 
 <!-- PURCHASE -->
 <div class="ov" id="buym">
-  <div class="modal">
-    <button class="mc" onclick="cm('buym')">&#215;</button>
+  <div class="modal wide">
+    <button class="mc" onclick="cm('buym');clearPayment()">&#215;</button>
     <div class="m-title">Confirm Purchase</div>
     <div class="m-sub">Protected by PayProtect Escrow</div>
     <div id="buy-info"></div>
     <div id="buy-bd"></div>
-    <div class="escrow"><strong>PayProtect:</strong> Payment held until you confirm delivery. Full refund if item isn't as described.</div>
-    <div class="field"><label>Delivery Address</label><textarea id="baddr" placeholder="Full delivery address..."></textarea></div>
-    <button class="btn-full btn-blue" onclick="confBuy()">Place Order</button>
+
+    <!-- STEP 1: Address + Payment Method -->
+    <div id="pay-step1">
+      <div class="field"><label>Delivery Address</label><textarea id="baddr" placeholder="Full delivery address..."></textarea></div>
+      <div class="field"><label>Payment Method</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+          <div id="pm-upi" onclick="selPM('upi')" style="border:2px solid rgba(37,99,235,.5);border-radius:10px;padding:14px;text-align:center;cursor:pointer;background:rgba(37,99,235,.12);transition:all .2s">
+            <div style="font-size:22px;margin-bottom:6px">&#128247;</div>
+            <div style="font-size:13px;font-weight:600;color:var(--white)">UPI / QR Code</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:2px">Scan & Pay instantly</div>
+          </div>
+          <div id="pm-cod" onclick="selPM('cod')" style="border:2px solid var(--border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;background:rgba(15,23,42,.4);transition:all .2s">
+            <div style="font-size:22px;margin-bottom:6px">&#128181;</div>
+            <div style="font-size:13px;font-weight:600;color:var(--white)">Cash on Delivery</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:2px">Pay when delivered</div>
+          </div>
+        </div>
+      </div>
+      <div class="escrow"><strong>PayProtect:</strong> Payment held until you confirm delivery. Full refund if item isn't as described.</div>
+      <button class="btn-full btn-blue" id="pay-step1-btn" onclick="proceedToPayment()">Continue</button>
+    </div>
+
+    <!-- STEP 2: UPI QR Payment -->
+    <div id="pay-step2-upi" style="display:none">
+      <div style="text-align:center;padding:10px 0 20px">
+        <div style="font-size:13px;color:var(--dim);margin-bottom:16px">Scan the QR code below with any UPI app</div>
+        <div id="qr-container" style="display:inline-block;background:white;padding:16px;border-radius:14px;margin-bottom:16px">
+          <div id="qr-img" style="width:200px;height:200px;display:flex;align-items:center;justify-content:center">
+            <div class="spin"></div>
+          </div>
+        </div>
+        <div id="upi-amount-display" style="font-family:var(--fh);font-size:24px;font-weight:800;color:var(--white);margin-bottom:6px"></div>
+        <div style="font-size:13px;color:var(--dim);margin-bottom:20px">Pay exactly this amount</div>
+        <div id="pay-status-bar" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:12px;font-size:13px;color:#F59E0B;margin-bottom:20px">
+          Waiting for payment... (auto-checks every 5 seconds)
+        </div>
+      </div>
+      <div class="field">
+        <label>UPI Reference Number <span style="color:var(--dim);font-weight:400;text-transform:none;letter-spacing:0">(Enter after paying)</span></label>
+        <input type="text" id="upi-ref" placeholder="12-digit UPI reference number from your payment app"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="btn-full" style="background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted)" onclick="goBackToStep1()">Back</button>
+        <button class="btn-full btn-blue" id="confirm-upi-btn" onclick="confirmUpiPayment()">Confirm Payment</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: COD -->
+    <div id="pay-step2-cod" style="display:none">
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px;padding:20px;margin-bottom:20px;text-align:center">
+        <div style="font-size:32px;margin-bottom:10px">&#128181;</div>
+        <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:var(--white);margin-bottom:6px">Cash on Delivery</div>
+        <div style="font-size:13px;color:var(--dim);line-height:1.7">Pay the full amount in cash when your component is delivered. Have the exact amount ready.</div>
+      </div>
+      <div id="cod-amount" style="font-family:var(--fh);font-size:22px;font-weight:800;color:var(--amber);text-align:center;margin-bottom:20px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="btn-full" style="background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted)" onclick="goBackToStep1()">Back</button>
+        <button class="btn-full btn-blue" onclick="confirmCOD()">Place COD Order</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Success -->
+    <div id="pay-step3" style="display:none;text-align:center;padding:20px 0">
+      <div style="font-size:52px;margin-bottom:16px">&#10004;&#65039;</div>
+      <div style="font-family:var(--fh);font-size:22px;font-weight:800;color:var(--white);margin-bottom:8px">Order Placed!</div>
+      <div id="success-msg" style="font-size:14px;color:var(--dim);line-height:1.7;margin-bottom:24px"></div>
+      <button class="btn-full btn-blue" onclick="cm('buym');clearPayment();gp('profile')">View My Orders</button>
+    </div>
   </div>
 </div>
 
@@ -426,6 +493,18 @@ footer{background:#060E1A;border-top:1px solid rgba(255,255,255,.05);padding:64p
     </div>
     <div id="rsummary"></div>
     <div class="field"><label>Delivery Address</label><textarea id="raddr" placeholder="Full delivery address..."></textarea></div>
+    <div class="field"><label>Payment Method</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+        <div id="rpm-upi" onclick="selRentPM('upi')" style="border:2px solid rgba(37,99,235,.5);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:rgba(37,99,235,.12);transition:all .2s">
+          <div style="font-size:18px;margin-bottom:4px">&#128247;</div>
+          <div style="font-size:13px;font-weight:600;color:var(--white)">UPI / QR</div>
+        </div>
+        <div id="rpm-cod" onclick="selRentPM('cod')" style="border:2px solid var(--border);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:rgba(15,23,42,.4);transition:all .2s">
+          <div style="font-size:18px;margin-bottom:4px">&#128181;</div>
+          <div style="font-size:13px;font-weight:600;color:var(--white)">Cash on Delivery</div>
+        </div>
+      </div>
+    </div>
     <button class="btn-full btn-blue" onclick="confRent()">Confirm Booking</button>
   </div>
 </div>
@@ -434,7 +513,7 @@ footer{background:#060E1A;border-top:1px solid rgba(255,255,255,.05);padding:64p
 <!-- CHAT WITH SELLER -->
 <div class="ov" id="chatm">
   <div class="modal wide">
-    <button class="mc" onclick="cm('chatm');clearInterval(window._chatPoll)">&#215;</button>
+    <button class="mc" onclick="cm('chatm');clearInterval(window._chatPoll);chatItem=null">&#215;</button>
     <div class="m-title">Chat with Seller</div>
     <div id="chat-seller-info" class="m-sub"></div>
     <div id="chat-messages" style="background:rgba(15,23,42,.6);border:1px solid var(--border);border-radius:12px;padding:16px;height:300px;overflow-y:auto;margin-bottom:14px;display:flex;flex-direction:column;gap:10px"></div>
@@ -950,16 +1029,212 @@ window.openBuy=(id)=>{
   om('buym');
 };
 
-window.confBuy=async()=>{
+// ── UROPAY CONFIG ──
+const UROPAY_KEY = 'TEST_SKR84RPU4T2C5RX2';
+const UROPAY_SECRET = 'TEST_M11GGXJUKR8HR9NEBU6CPJUTGCB78KFCVDAWCS83YD1A1WACR7';
+const UROPAY_API = 'https://api.uropay.me';
+
+// SHA-512 hash using SubtleCrypto (browser native, no library needed)
+async function sha512(str){
+  const buf=await crypto.subtle.digest('SHA-512',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function uroHeaders(){
+  const hashed=await sha512(UROPAY_SECRET);
+  return{
+    'Content-Type':'application/json',
+    'Accept':'application/json',
+    'X-API-KEY':UROPAY_KEY,
+    'Authorization':`Bearer ${hashed}`
+  };
+}
+
+// Active payment state
+let payState={method:'upi',uroOrderId:null,pollTimer:null,totalAmount:0,orderData:null};
+let rentPayMethod='upi';
+
+// Payment method selection for buy
+window.selPM=(method)=>{
+  payState.method=method;
+  document.getElementById('pm-upi').className=method==='upi'?'pm-sel':'pm-unsel';
+  document.getElementById('pm-cod').className=method==='cod'?'pm-sel':'pm-unsel';
+  // re-apply base styles
+  ['pm-upi','pm-cod'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.style.borderRadius='10px';el.style.padding='14px';
+    el.style.textAlign='center';el.style.cursor='pointer';el.style.transition='all .2s';
+  });
+};
+
+window.selRentPM=(method)=>{
+  rentPayMethod=method;
+  document.getElementById('rpm-upi').className=method==='upi'?'pm-sel':'pm-unsel';
+  document.getElementById('rpm-cod').className=method==='cod'?'pm-sel':'pm-unsel';
+};
+
+window.proceedToPayment=async()=>{
   if(!buyItem)return;
   const addr=document.getElementById('baddr').value.trim();
   if(!addr)return toast('Enter a delivery address','err');
-  try{
-    await addDoc(collection(db,'orders'),{listingId:buyItem.id,title:buyItem.title,price:buyItem.price,sellerName:buyItem.sellerName,sellerId:buyItem.sellerId,buyerId:CU.uid,buyerEmail:CU.email,buyerName:CU.displayName||'',deliveryAddress:addr,status:'payment_held',type:'purchase',createdAt:serverTimestamp()});
-    cm('buym');document.getElementById('baddr').value='';toast('Order placed! Payment in escrow.','ok');
-    if(document.getElementById('profile-page').classList.contains('active'))loadMyData();
-  }catch(er){toast('Error: '+er.message,'err');}
+  const fee=Math.round(buyItem.price*.03);
+  const total=buyItem.price+fee+80;
+  payState.totalAmount=total;
+  payState.orderData={
+    listingId:buyItem.id,title:buyItem.title,price:buyItem.price,
+    sellerName:buyItem.sellerName,sellerId:buyItem.sellerId,
+    buyerId:CU.uid,buyerEmail:CU.email,buyerName:CU.displayName||'',
+    deliveryAddress:addr,type:'purchase'
+  };
+
+  document.getElementById('pay-step1').style.display='none';
+
+  if(payState.method==='cod'){
+    document.getElementById('cod-amount').innerHTML='&#8377;'+total.toLocaleString('en-IN');
+    document.getElementById('pay-step2-cod').style.display='block';
+  } else {
+    document.getElementById('pay-step2-upi').style.display='block';
+    await generateUroOrder(total,'buy');
+  }
 };
+
+async function generateUroOrder(amountRupees, context){
+  const merchantOrderId='RV-'+Date.now()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+  try{
+    const headers=await uroHeaders();
+    const res=await fetch(UROPAY_API+'/order/generate',{
+      method:'POST',
+      headers,
+      body:JSON.stringify({
+        amount:amountRupees,
+        merchantOrderId,
+        customerName:CU.displayName||'Customer',
+        customerEmail:CU.email,
+        transactionNote:'ReVolt Order '+merchantOrderId
+      })
+    });
+    const data=await res.json();
+    if(data.code===200&&data.data){
+      payState.uroOrderId=data.data.uroPayOrderId;
+      // Show QR code
+      const qrEl=document.getElementById('qr-img');
+      if(qrEl){
+        qrEl.innerHTML=`<img src="${data.data.qrCode}" style="width:200px;height:200px;border-radius:4px"/>`;
+      }
+      const amtEl=document.getElementById('upi-amount-display');
+      if(amtEl) amtEl.innerHTML='&#8377;'+amountRupees.toLocaleString('en-IN');
+      // Start polling for payment status
+      startPolling(context);
+    } else {
+      toast('Could not generate payment QR: '+(data.message||'Unknown error'),'err');
+      goBackToStep1();
+    }
+  }catch(e){
+    console.error('UROPay generate:',e);
+    toast('Payment service error. Try COD instead.','err');
+    goBackToStep1();
+  }
+}
+
+function startPolling(context){
+  clearInterval(payState.pollTimer);
+  payState.pollTimer=setInterval(async()=>{
+    if(!payState.uroOrderId)return;
+    try{
+      const res=await fetch(`${UROPAY_API}/order/status/${payState.uroOrderId}`,{
+        headers:{'Content-Type':'application/json','Accept':'application/json','X-API-KEY':UROPAY_KEY}
+      });
+      const data=await res.json();
+      if(data.data?.orderStatus==='COMPLETED'){
+        clearInterval(payState.pollTimer);
+        await saveOrderAndSuccess(context,'upi_completed',payState.uroOrderId);
+      }
+    }catch(e){console.error('Poll:',e);}
+  },5000);
+}
+
+window.confirmUpiPayment=async()=>{
+  const ref=document.getElementById('upi-ref').value.trim();
+  if(!ref)return toast('Enter the UPI reference number from your payment app','err');
+  if(!/^\d{10,15}$/.test(ref))return toast('UPI reference should be a 10-15 digit number','err');
+
+  const btn=document.getElementById('confirm-upi-btn');
+  btn.textContent='Verifying...';btn.disabled=true;
+
+  try{
+    // Update UROPay with reference number
+    if(payState.uroOrderId){
+      const headers=await uroHeaders();
+      await fetch(UROPAY_API+'/order/update',{
+        method:'PATCH',
+        headers,
+        body:JSON.stringify({uroPayOrderId:payState.uroOrderId,referenceNumber:ref,orderStatus:'COMPLETED'})
+      });
+    }
+    clearInterval(payState.pollTimer);
+    const ctx=payState.orderData?.type==='rental'?'rent':'buy';
+    await saveOrderAndSuccess(ctx,'upi_verified',ref);
+  }catch(e){
+    btn.textContent='Confirm Payment';btn.disabled=false;
+    toast('Verification failed: '+e.message,'err');
+  }
+};
+
+window.confirmCOD=async()=>{
+  await saveOrderAndSuccess('buy','cod',null);
+};
+
+async function saveOrderAndSuccess(context,payMethod,ref){
+  try{
+    const od=payState.orderData;
+    await addDoc(collection(db,'orders'),{
+      ...od,
+      paymentMethod:payMethod,
+      upiReference:ref||null,
+      uroPayOrderId:payState.uroOrderId||null,
+      status:payMethod==='cod'?'cod_pending':'payment_confirmed',
+      createdAt:serverTimestamp()
+    });
+    // Show success
+    document.getElementById('pay-step2-upi').style.display='none';
+    document.getElementById('pay-step2-cod').style.display='none';
+    document.getElementById('pay-step3').style.display='block';
+    const msg=payMethod==='cod'
+      ?'Your order is placed! Pay <strong style="color:var(--amber)">&#8377;'+payState.totalAmount.toLocaleString('en-IN')+'</strong> in cash on delivery.'
+      :'Payment confirmed! Your order is in the PayProtect escrow. You will receive delivery updates shortly.';
+    document.getElementById('success-msg').innerHTML=msg;
+    toast(payMethod==='cod'?'COD order placed!':'Payment confirmed!','ok');
+    loadAll();
+    if(document.getElementById('profile-page').classList.contains('active'))loadMyData();
+  }catch(er){toast('Order save error: '+er.message,'err');}
+}
+
+window.goBackToStep1=()=>{
+  clearInterval(payState.pollTimer);
+  payState.uroOrderId=null;
+  document.getElementById('pay-step2-upi').style.display='none';
+  document.getElementById('pay-step2-cod').style.display='none';
+  document.getElementById('pay-step1').style.display='block';
+  const btn=document.getElementById('confirm-upi-btn');
+  if(btn){btn.textContent='Confirm Payment';btn.disabled=false;}
+};
+
+window.clearPayment=()=>{
+  clearInterval(payState.pollTimer);
+  payState={method:'upi',uroOrderId:null,pollTimer:null,totalAmount:0,orderData:null};
+  document.getElementById('pay-step1').style.display='block';
+  document.getElementById('pay-step2-upi').style.display='none';
+  document.getElementById('pay-step2-cod').style.display='none';
+  document.getElementById('pay-step3').style.display='none';
+  const qr=document.getElementById('qr-img');
+  if(qr)qr.innerHTML='<div class="spin"></div>';
+  const ref=document.getElementById('upi-ref');
+  if(ref)ref.value='';
+  selPM('upi');
+};
+
+// Legacy confBuy — now routes through payment flow
+window.confBuy=async()=>{ await proceedToPayment(); };
 
 // ── RENTAL ──
 window.openRent=(id)=>{
@@ -997,11 +1272,48 @@ window.confRent=async()=>{
   const rs=document.getElementById('rstart').value,re=document.getElementById('rend').value;
   if(!addr)return toast('Enter a delivery address','err');
   if(!rs||!re)return toast('Select rental dates','err');
-  try{
-    await addDoc(collection(db,'orders'),{listingId:rentItem.id,title:rentItem.title,dailyRate:rentItem.dailyRate||0,sellerName:rentItem.sellerName,sellerId:rentItem.sellerId,buyerId:CU.uid,buyerEmail:CU.email,buyerName:CU.displayName||'',deliveryAddress:addr,startDate:rs,endDate:re,status:'rental_confirmed',type:'rental',createdAt:serverTimestamp()});
-    cm('rentm');toast('Rental booked! Confirmation coming soon.','ok');
-    if(document.getElementById('profile-page').classList.contains('active'))loadMyData();
-  }catch(er){toast('Error: '+er.message,'err');}
+
+  const s=new Date(rs),e=new Date(re);
+  const days=Math.max(1,Math.ceil((e-s)/86400000));
+  const amt=days>=7?(rentItem.weeklyRate||0)*Math.ceil(days/7):(rentItem.dailyRate||0)*days;
+  const total=Math.round(amt*1.5); // includes deposit
+
+  payState.orderData={
+    listingId:rentItem.id,title:rentItem.title,dailyRate:rentItem.dailyRate||0,
+    sellerName:rentItem.sellerName,sellerId:rentItem.sellerId,
+    buyerId:CU.uid,buyerEmail:CU.email,buyerName:CU.displayName||'',
+    deliveryAddress:addr,startDate:rs,endDate:re,type:'rental'
+  };
+  payState.totalAmount=total;
+
+  if(rentPayMethod==='cod'){
+    try{
+      await addDoc(collection(db,'orders'),{
+        ...payState.orderData,paymentMethod:'cod',
+        status:'cod_pending',createdAt:serverTimestamp()
+      });
+      cm('rentm');toast('Rental booked! Pay on delivery.','ok');
+      if(document.getElementById('profile-page').classList.contains('active'))loadMyData();
+    }catch(er){toast('Error: '+er.message,'err');}
+  } else {
+    // UPI payment for rental — close rent modal, open buy modal in UPI step
+    cm('rentm');
+    // Reuse the buy modal's UPI flow
+    document.getElementById('buy-info').innerHTML=`
+      <div class="pi"><div class="pimg">&#9673;</div>
+        <div><div class="ptitle">${rentItem.title}</div>
+        <div class="pmeta">Rental: ${rs} to ${re} &bull; &#8377;${total.toLocaleString('en-IN')} (inc. deposit)</div></div>
+      </div>`;
+    document.getElementById('buy-bd').innerHTML='';
+    document.getElementById('pay-step1').style.display='none';
+    document.getElementById('pay-step2-upi').style.display='block';
+    document.getElementById('upi-amount-display').innerHTML='&#8377;'+total.toLocaleString('en-IN');
+    document.getElementById('qr-img').innerHTML='<div class="spin"></div>';
+    document.getElementById('pay-step2-cod').style.display='none';
+    document.getElementById('pay-step3').style.display='none';
+    om('buym');
+    await generateUroOrder(total,'rent');
+  }
 };
 
 // ── PROFILE DATA ──
@@ -1099,34 +1411,53 @@ async function loadMyData(){
 
 window.openSellerInbox=async(listingId,listingTitle)=>{
   if(!CU)return;
-  // Load all messages where this user is the seller for this listing
   try{
-    chatItem={id:listingId,title:listingTitle,sellerId:CU.uid,sellerName:CU.displayName||''};
-    document.getElementById('chat-seller-info').textContent='Messages about: '+listingTitle;
     const box=document.getElementById('chat-messages');
-    box.innerHTML='<div style="text-align:center;color:var(--dim);font-size:14px">Loading...</div>';
+    box.innerHTML='<div style="text-align:center;color:var(--dim);font-size:14px;padding:20px">Loading...</div>';
     om('chatm');
-    // Find all chat rooms for this listing by querying messages collection group
-    // Since Firestore can't query subcollections without collection group queries,
-    // we store a flat reference too
+    // Find all chat rooms for this listing from chatindex
     const snap=await getDocs(query(collection(db,'chatindex'),where('listingId','==',listingId)));
     if(!snap.docs.length){
-      box.innerHTML='<div style="text-align:center;color:var(--dim);font-size:14px;margin:auto;padding:20px">No messages yet for this listing.<br><br>When buyers send you messages, they will appear here.</div>';
+      document.getElementById('chat-seller-info').textContent='Messages about: '+listingTitle;
+      box.innerHTML='<div style="text-align:center;color:var(--dim);font-size:14px;margin:auto;padding:30px">No messages yet.<br><br>Buyers will message you here when they click Chat on your listing.</div>';
       return;
     }
-    // Load messages from first room found
-    const roomId=snap.docs[0].data().roomId;
-    const msgSnap=await getDocs(query(collection(db,'chats',roomId,'messages'),orderBy('createdAt','asc')));
-    const msgs=msgSnap.docs.map(d=>d.data());
-    box.innerHTML=msgs.length?msgs.map(m=>{
-      const isMe=m.senderId===CU.uid;
-      return`<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};gap:3px">
-        <div style="background:${isMe?'rgba(37,99,235,.22)':'rgba(56,189,248,.1)'};border:1px solid ${isMe?'rgba(37,99,235,.3)':'rgba(56,189,248,.15)'};border-radius:${isMe?'12px 12px 3px 12px':'12px 12px 12px 3px'};padding:10px 14px;max-width:80%;font-size:14px;color:var(--gray);line-height:1.5">${m.text}</div>
-        <div style="font-size:11px;color:var(--dark)">${m.senderName||'User'}</div>
+    // If multiple buyers, show list to pick from
+    if(snap.docs.length>1){
+      document.getElementById('chat-seller-info').textContent=snap.docs.length+' conversations about: '+listingTitle;
+      box.innerHTML=`<div style="display:flex;flex-direction:column;gap:10px;padding:4px">
+        ${snap.docs.map(d=>{
+          const idx=d.data();
+          return`<div onclick="loadRoomAsseller('${idx.roomId}','${idx.buyerName||'Buyer'}','${listingTitle}','${idx.buyerId}')" 
+            style="padding:14px;background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.2);border-radius:10px;cursor:pointer;transition:background .2s"
+            onmouseover="this.style.background='rgba(37,99,235,.2)'" onmouseout="this.style.background='rgba(37,99,235,.1)'">
+            <div style="font-weight:600;color:var(--white);font-size:14px">&#128172; ${idx.buyerName||'Buyer'}</div>
+            <div style="font-size:12px;color:var(--dim);margin-top:3px">Click to open conversation</div>
+          </div>`;
+        }).join('')}
       </div>`;
-    }).join(''):'<div style="text-align:center;color:var(--dim);font-size:14px;margin:auto">No messages yet.</div>';
-    box.scrollTop=box.scrollHeight;
-  }catch(e){console.error(e);}
+      return;
+    }
+    // Single buyer — open directly
+    const idx=snap.docs[0].data();
+    loadRoomAsseller(idx.roomId,idx.buyerName||'Buyer',listingTitle,idx.buyerId);
+  }catch(e){console.error('SellerInbox:',e);}
+};
+
+window.loadRoomAsseller=async(roomId,buyerName,listingTitle,buyerId)=>{
+  // Store active chat context — seller knows the roomId directly
+  chatItem={
+    _roomId: roomId,          // pre-computed room ID, no recalculation
+    _isSeller: true,
+    id: 'seller_view',
+    title: listingTitle,
+    sellerId: CU.uid,
+    sellerName: CU.displayName||''
+  };
+  document.getElementById('chat-seller-info').textContent='Chat with '+buyerName+' about: '+listingTitle;
+  clearInterval(window._chatPoll);
+  await renderRoom(roomId);
+  window._chatPoll=setInterval(()=>renderRoom(roomId),4000);
 };
 
 // ── DELETE LISTING ──
@@ -1147,70 +1478,99 @@ window.delListing=async(id)=>{
   }catch(er){toast('Error: '+er.message,'err');}
 };
 
-// ── CHAT WITH SELLER ──
+// ── CHAT WITH SELLER (buyer opens chat) ──
 window.openChat=async(listingId)=>{
   if(!CU){om('lm');toast('Sign in to chat with seller','err');return;}
-  chatItem=listings.find(l=>l.id===listingId);
-  if(!chatItem)return;
-  if(chatItem.sellerId===CU.uid){toast('This is your own listing','err');return;}
-  document.getElementById('chat-seller-info').textContent='Chatting about: '+chatItem.title+' — Seller: '+chatItem.sellerName;
+  const item=listings.find(l=>l.id===listingId);
+  if(!item)return;
+  if(item.sellerId===CU.uid){toast('This is your own listing','err');return;}
+
+  // Room ID: always buyer_seller_listingId sorted so both sides get same room
+  const roomId=[CU.uid,item.sellerId].sort().join('_')+'_'+listingId;
+  chatItem={
+    _roomId: roomId,
+    _isSeller: false,
+    id: listingId,
+    title: item.title,
+    sellerId: item.sellerId,
+    sellerName: item.sellerName
+  };
+  document.getElementById('chat-seller-info').textContent='Chatting about: '+item.title+' — Seller: '+item.sellerName;
   om('chatm');
-  loadChatMessages(listingId);
-  // Poll for new messages every 5s
   clearInterval(window._chatPoll);
-  window._chatPoll=setInterval(()=>loadChatMessages(listingId),5000);
+  await renderRoom(roomId);
+  window._chatPoll=setInterval(()=>renderRoom(roomId),4000);
 };
 
-async function loadChatMessages(listingId){
-  // Chat room ID = sorted user IDs to make it consistent both ways
-  if(!chatItem||!CU)return;
-  const roomId=[CU.uid,chatItem.sellerId].sort().join('_')+'_'+listingId;
+// Single render function used by BOTH buyer and seller — no resets
+async function renderRoom(roomId){
+  if(!roomId)return;
   try{
     const snap=await getDocs(query(collection(db,'chats',roomId,'messages'),orderBy('createdAt','asc')));
     const msgs=snap.docs.map(d=>d.data());
     const box=document.getElementById('chat-messages');
-    box.innerHTML=msgs.length?msgs.map(m=>{
-      const isMe=m.senderId===CU.uid;
-      return`<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};gap:3px">
-        <div style="background:${isMe?'rgba(37,99,235,.22)':'rgba(56,189,248,.1)'};border:1px solid ${isMe?'rgba(37,99,235,.3)':'rgba(56,189,248,.15)'};border-radius:${isMe?'12px 12px 3px 12px':'12px 12px 12px 3px'};padding:10px 14px;max-width:80%;font-size:14px;color:var(--gray);line-height:1.5">${m.text}</div>
-        <div style="font-size:11px;color:var(--dark)">${m.senderName||'User'}</div>
-      </div>`;
-    }).join(''):'<div style="text-align:center;color:var(--dim);font-size:14px;margin:auto">No messages yet. Say hello!</div>';
-    box.scrollTop=box.scrollHeight;
-  }catch(e){console.error('Chat load:',e);}
+    const wasAtBottom=box.scrollHeight-box.clientHeight-box.scrollTop<60;
+    box.innerHTML=msgs.length
+      ?msgs.map(m=>{
+          const isMe=m.senderId===CU.uid;
+          return`<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};gap:3px;margin-bottom:4px">
+            <div style="background:${isMe?'rgba(37,99,235,.22)':'rgba(56,189,248,.1)'};border:1px solid ${isMe?'rgba(37,99,235,.3)':'rgba(56,189,248,.15)'};border-radius:${isMe?'12px 12px 3px 12px':'12px 12px 12px 3px'};padding:10px 14px;max-width:82%;font-size:14px;color:var(--gray);line-height:1.5;word-break:break-word">${m.text}</div>
+            <div style="font-size:11px;color:var(--dark);padding:0 4px">${isMe?'You':m.senderName||'Seller'}</div>
+          </div>`;
+        }).join('')
+      :'<div style="text-align:center;color:var(--dim);font-size:14px;margin:auto;padding:20px">No messages yet. Say hello!</div>';
+    if(wasAtBottom)box.scrollTop=box.scrollHeight;
+  }catch(e){console.error('renderRoom:',e);}
 }
 
 window.sendChatMsg=async()=>{
   if(!chatItem||!CU)return;
   const inp=document.getElementById('chat-input');
   const text=inp.value.trim();if(!text)return;
-  const roomId=[CU.uid,chatItem.sellerId].sort().join('_')+'_'+chatItem.id;
+
+  // Always use the pre-computed roomId stored in chatItem
+  const roomId=chatItem._roomId;
+  if(!roomId){toast('Chat error — please reopen the chat','err');return;}
+
+  inp.value='';
   try{
-    // Write message
     await addDoc(collection(db,'chats',roomId,'messages'),{
-      text,senderId:CU.uid,senderName:CU.displayName||CU.email,
-      recipientId:chatItem.sellerId,listingId:chatItem.id,
-      createdAt:serverTimestamp()
+      text,
+      senderId: CU.uid,
+      senderName: CU.displayName||CU.email,
+      recipientId: chatItem._isSeller ? null : chatItem.sellerId,
+      listingId: chatItem.id,
+      createdAt: serverTimestamp()
     });
-    // Write chatindex entry so seller can find this room (upsert pattern)
-    const idxRef=collection(db,'chatindex');
-    const existing=await getDocs(query(idxRef,where('roomId','==',roomId)));
-    if(existing.empty){
-      await addDoc(idxRef,{
-        roomId,listingId:chatItem.id,listingTitle:chatItem.title,
-        sellerId:chatItem.sellerId,buyerId:CU.uid,
-        buyerName:CU.displayName||CU.email,
-        createdAt:serverTimestamp()
-      });
+
+    // Register room in chatindex so seller can find it (only if buyer, only once)
+    if(!chatItem._isSeller){
+      const idxRef=collection(db,'chatindex');
+      const existing=await getDocs(query(idxRef,where('roomId','==',roomId)));
+      if(existing.empty){
+        await addDoc(idxRef,{
+          roomId,
+          listingId: chatItem.id,
+          listingTitle: chatItem.title,
+          sellerId: chatItem.sellerId,
+          buyerId: CU.uid,
+          buyerName: CU.displayName||CU.email,
+          createdAt: serverTimestamp()
+        });
+      }
     }
-    inp.value='';
-    loadChatMessages(chatItem.id);
-  }catch(er){toast('Send failed: '+er.message,'err');}
+
+    // Render immediately without waiting for poll
+    await renderRoom(roomId);
+  }catch(er){
+    inp.value=text; // restore on fail
+    toast('Send failed: '+er.message,'err');
+  }
 };
 
 // ── AI CHECKER (Google Gemini — Free) ──
 // Get your FREE key at: https://aistudio.google.com → "Get API Key"
-const GEMINI_KEY = 'AIzaSyCflGqPcMoRUCqK4EynW1CNZ8eeeTvkLyA';
+const GEMINI_KEY = 'PASTE_YOUR_GEMINI_KEY_HERE';
 
 const SYSTEM_PROMPT = `You are ReVolt's AI Component Advisor — an expert electronics engineer helping India's maker community find affordable, reusable components. When a user describes a project:
 1. List recommended components with **bold names**, estimated Indian Rupee (₹) prices, and a brief reason for each.
