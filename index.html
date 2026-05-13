@@ -742,14 +742,39 @@ window.ra=(cb)=>{if(CU)cb();else{om('lm');toast('Please sign in first','err');}}
 // ── LISTINGS ──
 window.previewImg=(input)=>{
   const file=input.files[0];if(!file)return;
+  // Validate size — Firestore doc limit is 1MB, compress if needed
+  if(file.size>800000){
+    toast('Image too large. Use an image under 800KB.','err');
+    input.value='';return;
+  }
   const reader=new FileReader();
   reader.onload=e=>{
     document.getElementById('img-preview').src=e.target.result;
     document.getElementById('img-preview-wrap').style.display='block';
-    document.getElementById('img-upload-txt').textContent='Image selected: '+file.name;
+    document.getElementById('img-upload-txt').textContent='Selected: '+file.name+' ('+Math.round(file.size/1024)+'KB)';
   };
   reader.readAsDataURL(file);
 };
+
+// Compress image to JPEG at reduced quality before storing
+function compressImage(file,maxWidth=800,quality=0.7){
+  return new Promise(res=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        let w=img.width,h=img.height;
+        if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth;}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        res(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 window.subList=async()=>{
   if(!CU)return toast('Sign in first','err');
@@ -761,36 +786,56 @@ window.subList=async()=>{
   if(!t||!cat||!pr||!co||!gr)return toast('Fill all required fields','err');
 
   const btn=document.getElementById('publish-btn');
-  btn.textContent='Uploading...';btn.disabled=true;
+  btn.textContent='Processing...';btn.disabled=true;
 
   let imageUrl='';
   const fileInput=document.getElementById('simgfile');
   if(fileInput.files[0]){
     try{
-      const file=fileInput.files[0];
-      const storageRef=ref(storage,`listings/${CU.uid}_${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef,file);
-      imageUrl=await getDownloadURL(storageRef);
+      btn.textContent='Compressing image...';
+      // Compress to ~200KB max before storing as base64 in Firestore
+      imageUrl=await compressImage(fileInput.files[0],800,0.72);
     }catch(er){
-      // Fallback: store as base64 in Firestore if Storage rules block
-      const reader=new FileReader();
-      imageUrl=await new Promise(res=>{reader.onload=e=>res(e.target.result);reader.readAsDataURL(fileInput.files[0]);});
+      toast('Image processing failed, listing without image.','err');
+      imageUrl='';
     }
   }
 
-  const d={title:t,category:cat,price:pr,mrp:mrp||pr*2,condition:co,grade:gr,description:desc,imageUrl,sellerName:CU.displayName||'Seller',sellerId:CU.uid,sellerEmail:CU.email,rating:4.8,rentable,status:'active',createdAt:serverTimestamp()};
-  if(rentable){d.dailyRate=parseFloat(document.getElementById('sdaily').value)||0;d.weeklyRate=parseFloat(document.getElementById('sweekly').value)||0;}
+  btn.textContent='Publishing...';
+  const d={
+    title:t,category:cat,price:pr,mrp:mrp||pr*2,
+    condition:co,grade:gr,description:desc,
+    imageUrl,  // base64 JPEG stored directly in Firestore
+    sellerName:CU.displayName||'Seller',
+    sellerId:CU.uid,sellerEmail:CU.email,
+    rating:4.8,rentable,status:'active',
+    createdAt:serverTimestamp()
+  };
+  if(rentable){
+    d.dailyRate=parseFloat(document.getElementById('sdaily').value)||0;
+    d.weeklyRate=parseFloat(document.getElementById('sweekly').value)||0;
+  }
   try{
     await addDoc(collection(db,'listings'),d);
-    cm('sellm');toast('Component listed!','ok');
+    cm('sellm');
+    toast('Component listed successfully!','ok');
     btn.textContent='Publish Listing';btn.disabled=false;
     ['stitle','sprice','smrp','sdesc','sdaily','sweekly'].forEach(id=>document.getElementById(id).value='');
     ['scat','scond','sgrade'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('simgfile').value='';
     document.getElementById('img-preview-wrap').style.display='none';
     document.getElementById('img-upload-txt').textContent='📷 Click to upload image';
+    document.getElementById('rfields').style.display='none';
+    document.getElementById('srent').value='no';
     loadAll();
-  }catch(er){btn.textContent='Publish Listing';btn.disabled=false;toast('Error: '+er.message,'err');}
+  }catch(er){
+    btn.textContent='Publish Listing';btn.disabled=false;
+    if(er.message.includes('exceeds')||er.message.includes('bytes')){
+      toast('Image too large even after compression. Try a smaller image.','err');
+    }else{
+      toast('Error: '+er.message,'err');
+    }
+  }
 };
 
 // ── LOAD ──
@@ -1165,7 +1210,7 @@ window.sendChatMsg=async()=>{
 
 // ── AI CHECKER (Google Gemini — Free) ──
 // Get your FREE key at: https://aistudio.google.com → "Get API Key"
-const GEMINI_KEY = 'AIzaSyCg-FD6uOFVGLVNxZGNhLDrZu8SFz3V6mY';
+const GEMINI_KEY = 'AIzaSyCflGqPcMoRUCqK4EynW1CNZ8eeeTvkLyA';
 
 const SYSTEM_PROMPT = `You are ReVolt's AI Component Advisor — an expert electronics engineer helping India's maker community find affordable, reusable components. When a user describes a project:
 1. List recommended components with **bold names**, estimated Indian Rupee (₹) prices, and a brief reason for each.
@@ -1180,55 +1225,62 @@ let convHistory=[];
 window.sendAI=async()=>{
   const inp=document.getElementById('aii');
   const msg=inp.value.trim();if(!msg)return;
-
-  if(GEMINI_KEY==='PASTE_YOUR_GEMINI_KEY_HERE'){
-    addMsg('b','**Setup needed:** Paste your free Gemini API key into the code.\n\nGet it free at **aistudio.google.com** → Get API Key → Create API Key.\n\nThen open revolt.html, find `PASTE_YOUR_GEMINI_KEY_HERE` and replace it with your key.');
-    return;
-  }
-
   inp.value='';
   addMsg('u',msg);
-  convHistory.push({role:'user',parts:[{text:msg}]});
   const tid=addThinking();
 
-  try{
-    // Build contents array with system instruction injected at start
-    const contents=[
-      {role:'user',parts:[{text:SYSTEM_PROMPT+'\n\nUser says: '+msg}]},
-      ...convHistory.slice(1)
-    ];
+  // Build contents — first message injects system prompt, rest is conversation
+  const toSend=convHistory.length===0
+    ?[{role:'user',parts:[{text:SYSTEM_PROMPT+'\n\n'+msg}]}]
+    :[{role:'user',parts:[{text:SYSTEM_PROMPT+'\n\n'+convHistory[0].parts[0].text}]},
+      ...convHistory.slice(1),
+      {role:'user',parts:[{text:msg}]}];
 
-    const res=await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-      {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          contents: convHistory.length===1
-            ? [{role:'user',parts:[{text:SYSTEM_PROMPT+'\n\n'+msg}]}]
-            : convHistory,
-          generationConfig:{maxOutputTokens:8192,temperature:0.7}
-        })
+  // Try multiple model names — Gemini naming is inconsistent across regions
+  const models=[
+    'gemini-2.5-flash-preview-05-20',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash'
+  ];
+
+  let success=false;
+  for(const model of models){
+    try{
+      const res=await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
+        {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            contents:toSend,
+            generationConfig:{maxOutputTokens:8192,temperature:0.7}
+          })
+        }
+      );
+      const data=await res.json();
+
+      if(data.error){
+        // If model not found, try next
+        if(data.error.code===404||data.error.status==='NOT_FOUND')continue;
+        removeThinking(tid);
+        addMsg('b','Gemini error: '+data.error.message);
+        success=true;break;
       }
-    );
-    const data=await res.json();
-    removeThinking(tid);
 
-    if(data.candidates&&data.candidates[0]?.content?.parts?.[0]?.text){
-      const reply=data.candidates[0].content.parts[0].text;
-      convHistory.push({role:'model',parts:[{text:reply}]});
-      addMsg('b',reply);
-    }else if(data.error){
-      convHistory.pop();
-      addMsg('b','API error: '+data.error.message+'\n\nMake sure your Gemini API key is correct.');
-    }else{
-      convHistory.pop();
-      addMsg('b','No response from Gemini. Try again.');
-    }
-  }catch(e){
+      if(data.candidates&&data.candidates[0]?.content?.parts?.[0]?.text){
+        removeThinking(tid);
+        const reply=data.candidates[0].content.parts[0].text;
+        convHistory.push({role:'user',parts:[{text:msg}]});
+        convHistory.push({role:'model',parts:[{text:reply}]});
+        addMsg('b',reply);
+        success=true;break;
+      }
+    }catch(e){continue;}
+  }
+
+  if(!success){
     removeThinking(tid);
-    convHistory.pop();
-    addMsg('b','Connection error. Check your internet connection and try again.');
+    addMsg('b','Could not connect to Gemini. Check your API key at **aistudio.google.com** and make sure billing/API is enabled.');
   }
 };
 
